@@ -1,0 +1,95 @@
+GTEX Wrapper / DDS Wrapper 2          Warhammer: Mark of Chaos
+=====================================================================
+
+  gtexwrapper.exe   .dds  ->  .gtex      (l'inverse de ddswrapper)
+  ddswrapper2.exe   .gtex ->  .dds       (remplace ddswrapper, voir plus bas)
+
+  Pour utiliser les programmes, seuls ces deux .exe comptent.
+  Le dossier "source" ne sert qu'à celui qui voudrait modifier ou recompiler
+  les programmes : vous pouvez l'ignorer.
+
+UTILISATION
+  Glissez-déposez UN OU PLUSIEURS fichiers sur l'exécutable (sélection
+  multiple dans l'Explorateur, puis déposer sur l'icône). Chaque fichier
+  produit son résultat à côté de lui : texture.dds -> texture.gtex.
+  La fenêtre se ferme toute seule si tout s'est bien passé ; en cas d'erreur
+  ou d'avertissement elle reste ouverte jusqu'à ce que vous appuyiez sur Entrée.
+  Ligne de commande : gtexwrapper fichier1.dds fichier2.dds ...   (-? pour l'aide)
+
+POURQUOI L'ANCIEN DDSWRAPPER PERDAIT DES DONNÉES (et ce qui est corrigé)
+  Format GTEX, tel que déduit de 11 fichiers du jeu :
+
+  1. Les mipmaps. Dans un .gtex, après l'image de base, chaque niveau réduit
+     est précédé de 3 entiers (largeur, hauteur, taille). L'ancien ddswrapper
+     copiait ces octets tels quels dans un DDS déclarant 1 seul niveau : les
+     mipmaps devenaient illisibles.
+     -> ddswrapper2 en fait de vrais mipmaps DDS, et gtexwrapper remet les 3
+        entiers devant chaque niveau. Le champ d'en-tête qui était appelé
+        "inconnu" à l'offset 0x0A est le nombre de niveaux (6 pour les grosses
+        textures, 1 pour la plupart des icônes) ; il est tenu à jour.
+  2. La taille d'origine. L'en-tête contient la taille du contenu (ex. 91x256,
+     100x100, 410x384...) et celle du conteneur en puissance de 2 (128x256,
+     128x128, 512x512...). Seule la seconde allait dans le DDS : la taille
+     d'origine était perdue. Les autres champs (1, 1, 21 ou 20, 3, 2) sont ceux
+     d'un D3DXIMAGE_INFO de l'image source (20 = R8G8B8 pour le DXT1,
+     21 = A8R8G8B8 pour le DXT3).
+     -> ddswrapper2 glisse l'en-tête GTEX complet dans des champs "réservés"
+        du DDS, que tous les logiciels ignorent. gtexwrapper le retrouve.
+
+  Vérifié sur vos 11 fichiers (DXT1 et DXT3, de 32x32 à 1024x1024) :
+  GTEX -> DDS -> GTEX redonne un fichier IDENTIQUE à l'octet près.
+
+SI VOUS RETOUCHEZ LE DDS DANS UN ÉDITEUR
+  Photoshop, GIMP, Paint.NET... réécrivent l'en-tête et effacent les champs
+  réservés. gtexwrapper reconstruit alors l'en-tête GTEX, par ordre de priorité :
+    1. depuis les champs cachés du DDS (si l'éditeur les a conservés) ;
+    2. depuis le .gtex déjà présent à côté, s'il a le même type et la même taille
+       -> GARDEZ DONC LE .GTEX D'ORIGINE DANS LE MÊME DOSSIER : c'est ce qui
+       redonne la taille d'origine, le nombre de niveaux, etc. ;
+    3. depuis les champs de l'ancien ddswrapper ;
+    4. sinon valeurs par défaut ; la taille d'origine est alors prise égale à
+       celle du conteneur (précisez-la avec -X100 -Y100 si besoin).
+  Un .gtex déjà présent à l'emplacement de sortie n'est jamais écrasé sans
+  trace : il est renommé en .gtex.bak (puis .bak2, .bak3...). S'il serait
+  identique au nouveau, il n'est pas touché. Option -B pour désactiver.
+
+MIPMAPS D'UN DDS RETOUCHÉ
+  - Le nombre de niveaux suit le .gtex d'origine s'il est à côté, sinon celui du
+    DDS (au plus 6, le maximum vu dans le jeu). Si le DDS n'a pas de mipmaps
+    alors que le .gtex d'origine en avait, ils sont régénérés.
+  - Sans .gtex d'origine, rien n'est inventé : 1 niveau reste 1 niveau. Option
+    -G6 pour imposer 6 niveaux (régénérés si absents), -G1 pour n'en garder aucun.
+  - Les mipmaps régénérés sont proches mais pas identiques à ceux du jeu (le
+    filtre exact utilisé par le jeu est inconnu ; 22 à 30 dB de ressemblance sur
+    la texture 1024x1024, difficile à distinguer à l'oeil). Pour une fidélité
+    parfaite, exportez le DDS avec ses mipmaps depuis l'éditeur.
+
+OPTIONS (précédées de - ou /, majuscules ou minuscules)
+  O<chemin>  fichier de sortie (un seul fichier) ou dossier (plusieurs fichiers)
+  S          échange largeur/hauteur dans l'en-tête de sortie (comme l'ancien -S)
+  X<n> Y<n>  gtexwrapper : largeur / hauteur d'origine du contenu
+  G<n>       gtexwrapper : nombre de niveaux de mipmaps voulu
+  B          ne pas sauvegarder en .bak un fichier de sortie existant
+  P          attendre Entrée à la fin même sans erreur
+  Q          silencieux (seules les erreurs sont affichées)
+  H ou ?     aide
+
+DDSWRAPPER2 VS DDSWRAPPER
+  Même fonctionnement et mêmes options (-O, -S, -Q, -?) : .gtex -> .dds, et
+  .tga / .bmp copiés avec la bonne extension. Nouveautés : plusieurs fichiers à
+  la fois, DDS conforme au standard (en-tête complet, mipmaps), conversion sans
+  perte, jamais d'écrasement silencieux.
+
+LIMITES (à lire)
+  - Les formats DXT1 et DXT3 sont vérifiés sur de vrais fichiers. DXT5 et les
+    textures non compressées n'ont pas d'exemple réel : elles suivent le code de
+    l'ancien ddswrapper et ont été testées sur des données synthétiques.
+  - Les .exe n'ont pas pu être lancés sous Windows pendant leur création (la
+    logique est testée sous Linux avec le même code). Windows 10 ou plus récent.
+    Windows peut afficher un avertissement SmartScreen pour un .exe non signé.
+  - DDS pris en charge : DXT1-5 (et BC1-3 en-tête DX10), RVB 24/32 bits.
+    Cubemaps et textures volumiques : non.
+
+COMPILER (facultatif)
+  Source en Go (go.mod, aucune dépendance) : build.bat (Windows) ou build.sh.
+  Tests : go test ./...   Le code est libre, comme celui de l'original.
